@@ -33,7 +33,20 @@ jobs:
 
     - name: Install Chromedriver
       run: |
-        wget -q https://chromedriver.storage.googleapis.com/126.0.6478.126/chromedriver_linux64.zip
+        # Отримуємо сумісну версію Chromedriver для Chrome 126
+        DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_126")
+        if [ -z "$DRIVER_VERSION" ]; then
+          echo "Помилка: Не вдалося знайти версію Chromedriver для Chrome 126"
+          exit 1
+        fi
+        echo "Версія Chromedriver: $DRIVER_VERSION"
+        
+        # Завантажуємо та встановлюємо Chromedriver
+        wget -q "https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip"
+        if [ $? -ne 0 ]; then
+          echo "Помилка: Не вдалося завантажити Chromedriver $DRIVER_VERSION"
+          exit 1
+        fi
         unzip chromedriver_linux64.zip
         sudo mv chromedriver /usr/local/bin/
         sudo chmod +x /usr/local/bin/chromedriver
