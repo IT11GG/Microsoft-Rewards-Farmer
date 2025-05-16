@@ -5,7 +5,13 @@ import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+    WebDriverException,
+)
 
 # Налаштування логування
 logging.basicConfig(
@@ -28,34 +34,57 @@ def send_discord_message(content, ping_everyone=False):
     except Exception as e:
         logging.error(f"Не вдалося надіслати повідомлення в Discord: {e}")
 
-# Логін у Microsoft Rewards
+# Логін у Microsoft Rewards з явними очікуваннями
 def login(driver, username, password):
+    wait = WebDriverWait(driver, 15)
+
     try:
         driver.get("https://login.live.com")
-        time.sleep(2)
-        driver.find_element(By.ID, "i0116").send_keys(username)
-        driver.find_element(By.ID, "idSIButton9").click()
-        time.sleep(2)
-        driver.find_element(By.ID, "i0118").send_keys(password)
-        driver.find_element(By.ID, "idSIButton9").click()
-        time.sleep(5)  # Чекаємо на логін
+        # Чекаємо на появу поля для введення емейлу
+        email_input = wait.until(EC.presence_of_element_located((By.ID, "i0116")))
+        email_input.clear()
+        email_input.send_keys(username)
+
+        next_button = wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9")))
+        next_button.click()
+
+        # Чекаємо на появу поля для введення паролю
+        password_input = wait.until(EC.presence_of_element_located((By.ID, "i0118")))
+        password_input.clear()
+        password_input.send_keys(password)
+
+        signin_button = wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9")))
+        signin_button.click()
+
+        # Чекаємо, поки не відбудеться редирект або з'явиться якийсь елемент, що підтверджує вхід
+        time.sleep(5)  # Альтернативно можна додати чекання на конкретний елемент сторінки після логіну
+
         logging.info(f"Успішний логін для {username}")
+
+    except TimeoutException:
+        logging.error(f"Таймаут при логіні для {username} - елемент не знайдено або неактивний.")
+        raise
     except Exception as e:
         logging.error(f"Помилка логіну для {username}: {e}")
         raise
 
 # Фармінг балів
 def farm_points(driver):
+    wait = WebDriverWait(driver, 15)
+
     try:
         driver.get("https://rewards.microsoft.com")
-        time.sleep(5)
-        # Припускаємо, що фармінг включає кліки по завданнях (потрібно адаптувати під актуальну структуру сайту)
+        time.sleep(5)  # Коротке очікування для завантаження сторінки
+
+        # Приклад фармінгу: шукаємо елементи пошуку і запускаємо пошук (потрібно адаптувати під актуальний сайт)
         search_boxes = driver.find_elements(By.CLASS_NAME, "search-box")
         for box in search_boxes:
+            box.clear()
             box.send_keys("test search")
             time.sleep(2)
             box.submit()
             time.sleep(5)
+
         logging.info("Фармінг завершено")
     except Exception as e:
         logging.error(f"Помилка фармінгу: {e}")
@@ -63,13 +92,17 @@ def farm_points(driver):
 
 # Отримання балансу акаунта
 def get_account_balance(driver):
+    wait = WebDriverWait(driver, 15)
+
     try:
         driver.get("https://rewards.microsoft.com/pointsbreakdown")
-        time.sleep(5)
-        balance_element = driver.find_element(By.CLASS_NAME, "points-balance")
-        return int(balance_element.text.replace(",", ""))
-    except NoSuchElementException:
-        logging.error("Не вдалося знайти елемент балансу")
+        # Чекаємо, поки з'явиться елемент балансу
+        balance_element = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "points-balance")))
+        balance_text = balance_element.text.replace(",", "").strip()
+        balance = int(balance_text)
+        return balance
+    except TimeoutException:
+        logging.error("Не вдалося знайти елемент балансу (таймаут)")
         return 0
     except Exception as e:
         logging.error(f"Помилка отримання балансу: {e}")
@@ -77,19 +110,27 @@ def get_account_balance(driver):
 
 # Вивід картки Overwatch
 def redeem_overwatch_card(driver, username):
+    wait = WebDriverWait(driver, 15)
+
     try:
         driver.get("https://rewards.microsoft.com/redeem")
-        time.sleep(5)
-        card_element = driver.find_element(By.XPATH, "//div[contains(text(), 'Overwatch 200 Coins')]")
+        # Чекаємо поки з'явиться картка
+        card_element = wait.until(EC.element_to_be_clickable(
+            (By.XPATH, "//div[contains(text(), 'Overwatch 200 Coins')]")
+        ))
         card_element.click()
         time.sleep(3)
-        redeem_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Redeem')]")
+
+        redeem_button = wait.until(EC.element_to_be_clickable(
+            (By.XPATH, "//button[contains(text(), 'Redeem')]")
+        ))
         redeem_button.click()
-        time.sleep(10)
-        code_element = driver.find_element(By.CLASS_NAME, "reward-code")
+
+        # Чекаємо поки з'явиться код
+        code_element = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "reward-code")))
         return code_element.text
-    except NoSuchElementException:
-        logging.error("Не вдалося знайти елемент картки Overwatch або кнопку виведення")
+    except TimeoutException:
+        logging.error("Не вдалося знайти елемент картки Overwatch або кнопку виведення (таймаут)")
         return None
     except Exception as e:
         logging.error(f"Помилка виведення картки: {e}")
@@ -97,7 +138,7 @@ def redeem_overwatch_card(driver, username):
 
 def main():
     try:
-        with open("accounts.json", "r") as f:
+        with open("accounts.json", "r", encoding="utf-8") as f:
             accounts = json.load(f)
     except Exception as e:
         logging.error(f"Не вдалося завантажити accounts.json: {e}")
@@ -112,13 +153,19 @@ def main():
     send_discord_message("🚀 Починаю фармінг Microsoft Rewards...")
 
     for account in accounts:
-        username = account["username"]
-        password = account["password"]
+        username = account.get("username")
+        password = account.get("password")
+
+        if not username or not password:
+            logging.warning(f"Пропущено акаунт з некоректними даними: {account}")
+            continue
+
         send_discord_message(f"📧 Обробка акаунта: {username}")
 
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
+
             login(driver, username, password)
             farm_points(driver)
 
@@ -145,7 +192,7 @@ def main():
             if driver:
                 try:
                     driver.quit()
-                except:
+                except Exception:
                     pass
 
     send_discord_message("🏁 Фармінг завершено!")
