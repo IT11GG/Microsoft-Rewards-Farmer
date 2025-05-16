@@ -1,19 +1,32 @@
-- name: Install Chrome 126 + Chromedriver (Chrome for Testing way)
-  run: |
-    # Встановлюємо Chrome 126 for Testing
-    wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/126.0.6478.126/linux64/chrome-linux64.zip
-    unzip chrome-linux64.zip
-    sudo mv chrome-linux64 /opt/chrome
-    sudo ln -s /opt/chrome/chrome /usr/bin/google-chrome
+name: Install Chrome 126 and Chromedriver
 
-    # Перевіряємо версію Chrome
-    google-chrome --version
+on:
+  workflow_dispatch:
 
-    # Встановлюємо Chromedriver із Chrome for Testing
-    wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/126.0.6478.126/linux64/chromedriver-linux64.zip
-    unzip chromedriver-linux64.zip
-    sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-    sudo chmod +x /usr/local/bin/chromedriver
+jobs:
+  install:
+    runs-on: ubuntu-latest
 
-    # Перевірка версії Chromedriver
-    chromedriver --version
+    steps:
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unzip libu2f-udev libxss1 libappindicator3-1 libindicator7
+
+    - name: Install specific Chrome version
+      run: |
+        wget -q https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_126.0.6478.126-1_amd64.deb
+        sudo dpkg -i google-chrome-stable_126.0.6478.126-1_amd64.deb || sudo apt-get install -f -y
+        rm google-chrome-stable_126.0.6478.126-1_amd64.deb
+        google-chrome --version
+
+    - name: Install Chromedriver (Chrome for Testing method)
+      run: |
+        CHROME_VERSION="126.0.6478.126"
+        echo "Installing Chromedriver version: $CHROME_VERSION"
+
+        wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_VERSION}/linux64/chromedriver-linux64.zip
+        unzip chromedriver-linux64.zip
+        sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+        sudo chmod +x /usr/local/bin/chromedriver
+        chromedriver --version
