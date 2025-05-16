@@ -2,7 +2,7 @@ name: Microsoft Rewards Farmer
 
 on:
   schedule:
-    - cron: '0 10 * * *' # Daily at 10:00 UTC
+    - cron: '0 10 * * *' # Щодня о 10:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -26,22 +26,22 @@ jobs:
 
     - name: Install Chromedriver
       run: |
-        # Get Chrome major version
+        # Отримуємо основну версію Chrome
         CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' | head -1)
-        echo "Chrome version: $CHROME_VERSION"
+        echo "Версія Chrome: $CHROME_VERSION"
         
-        # Fetch the latest Chromedriver version compatible with Chrome
+        # Отримуємо сумісну версію Chromedriver
         DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%%.*}")
         if [ -z "$DRIVER_VERSION" ]; then
-          echo "Error: Could not find Chromedriver version for Chrome $CHROME_VERSION"
+          echo "Помилка: Не вдалося знайти версію Chromedriver для Chrome $CHROME_VERSION"
           exit 1
         fi
-        echo "Chromedriver version: $DRIVER_VERSION"
+        echo "Версія Chromedriver: $DRIVER_VERSION"
         
-        # Download and install Chromedriver
+        # Завантажуємо та встановлюємо Chromedriver
         wget -q "https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip"
         if [ $? -ne 0 ]; then
-          echo "Error: Failed to download Chromedriver $DRIVER_VERSION"
+          echo "Помилка: Не вдалося завантажити Chromedriver $DRIVER_VERSION"
           exit 1
         fi
         unzip chromedriver_linux64.zip
@@ -59,15 +59,19 @@ jobs:
         ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
       run: |
         if [ -z "$ACCOUNTS_JSON" ]; then
-          echo "Error: ACCOUNTS_JSON secret is not set"
+          echo "Помилка: Секрет ACCOUNTS_JSON не встановлено"
           exit 1
         fi
         echo "$ACCOUNTS_JSON" > accounts.json
-        cat accounts.json # For debugging
+        cat accounts.json # Для налагодження
+
+    - name: Initialize farmer.log
+      run: |
+        echo "Ініціалізація farmer.log..." > farmer.log
 
     - name: Run farmer
       run: |
-        python main.py 2>&1 | tee farmer.log
+        python main.py 2>&1 | tee -a farmer.log
       continue-on-error: true
 
     - name: Upload logs
