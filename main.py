@@ -48,9 +48,10 @@ SEARCH_TERMS = [
 
 def init_driver():
     options = Options()
-    options.add_argument("--headless")  # безголовий режим
+    options.add_argument("--headless=new")  # новий headless режим, більш стабільний
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(10)
     return driver
@@ -60,22 +61,28 @@ def login(driver, username, password):
     time.sleep(2)
 
     # Ввод емейлу
-    email_input = driver.find_element(By.NAME, "loginfmt")
-    email_input.clear()
-    email_input.send_keys(username)
-    email_input.send_keys(Keys.RETURN)
+    try:
+        email_input = driver.find_element(By.NAME, "loginfmt")
+        email_input.clear()
+        email_input.send_keys(username)
+        email_input.send_keys(Keys.RETURN)
+    except NoSuchElementException:
+        print(f"❌ Не знайдено поле вводу email для {username}")
+        return False
     time.sleep(3)
 
     # Ввод пароля
-    password_input = driver.find_element(By.NAME, "passwd")
-    password_input.clear()
-    password_input.send_keys(password)
-    password_input.send_keys(Keys.RETURN)
+    try:
+        password_input = driver.find_element(By.NAME, "passwd")
+        password_input.clear()
+        password_input.send_keys(password)
+        password_input.send_keys(Keys.RETURN)
+    except NoSuchElementException:
+        print(f"❌ Не знайдено поле вводу пароля для {username}")
+        return False
     time.sleep(5)
 
-    # Можливе підтвердження безпеки - пропускаємо тут
-
-    # Перевірка успішного входу: перевіряємо, чи є елемент профілю
+    # Перевірка успішного входу
     try:
         driver.find_element(By.ID, "meControl")
         return True
@@ -83,10 +90,7 @@ def login(driver, username, password):
         return False
 
 def perform_searches(driver, username):
-    print(f"🚀 Починаю фармінг Microsoft Rewards...")
-    print(f"📧 Обробка акаунта: {username}")
-
-    # Вибір рандомної кількості пошуків від 7 до 12
+    print(f"🚀 Починаю фармінг Microsoft Rewards для {username}...")
     num_searches = random.randint(7, 12)
     searches = random.sample(SEARCH_TERMS, num_searches)
 
@@ -95,53 +99,52 @@ def perform_searches(driver, username):
         time.sleep(random.uniform(2, 5))
 
     points = get_points(driver)
-    print(f"✅ Пошук завершено кількість балів на цьому аккаунті: {points}")
+    print(f"✅ Пошук завершено, балів: {points}")
 
 def get_points(driver):
     try:
         driver.get("https://rewards.microsoft.com/")
         time.sleep(5)
-        # Спробуємо кілька селекторів, бо сайт може змінюватись
         selectors = [
-            "div.RewardsPointsCount",  # клас, де можуть показуватися бали
-            "span.msportalfx-ux-fluent-text-5",  # інший можливий селектор
-            "span#id_rc",  # інший варіант
+            "div.RewardsPointsCount",
+            "span.msportalfx-ux-fluent-text-5",
+            "span#id_rc",
         ]
-        points_text = None
         for sel in selectors:
             try:
                 elem = driver.find_element(By.CSS_SELECTOR, sel)
                 points_text = elem.text.strip()
                 if points_text:
-                    break
+                    return points_text
             except NoSuchElementException:
                 continue
-        return points_text if points_text else "Н/Д"
+        return "Н/Д"
     except Exception:
         return "Н/Д"
 
 def main():
     driver = init_driver()
+    try:
+        for acc in accounts:
+            username = acc.get("username")
+            password = acc.get("password")
 
-    for acc in accounts:
-        username = acc.get("username")
-        password = acc.get("password")
+            if not username or not password:
+                print("❌ Пропущено акаунт через відсутність username або password.")
+                continue
 
-        if not username or not password:
-            print(f"❌ Пропущено акаунт через відсутність username або password.")
-            continue
+            success = login(driver, username, password)
+            if not success:
+                print(f"❌ Помилка логіну для {username}")
+                continue
 
-        success = login(driver, username, password)
-        if not success:
-            print(f"❌ Помилка логіну для {username}")
-            continue
+            perform_searches(driver, username)
 
-        perform_searches(driver, username)
-        # Логаут
-        driver.get("https://login.live.com/logout.srf")
-        time.sleep(3)
-
-    driver.quit()
+            # Логаут
+            driver.get("https://login.live.com/logout.srf")
+            time.sleep(3)
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
     main()
