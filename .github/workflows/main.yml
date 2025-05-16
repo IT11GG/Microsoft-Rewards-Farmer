@@ -29,11 +29,34 @@ jobs:
         # Отримуємо основну версію Chrome
         CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' | head -1)
         echo "Версія Chrome: $CHROME_VERSION"
+        CHROME_MAJOR_VERSION=${CHROME_VERSION%%.*}
         
-        # Отримуємо сумісну версію Chromedriver
-        DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%%.*}")
+        # Спробуємо знайти сумісну версію Chromedriver
+        DRIVER_VERSION=""
+        for i in $(seq 0 2); do
+          TRY_VERSION=$((CHROME_MAJOR_VERSION - i))
+          RESPONSE=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${TRY_VERSION}")
+          if [[ "$RESPONSE" != *"NoSuchKey"* && "$RESPONSE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            DRIVER_VERSION=$RESPONSE
+            break
+          fi
+        done
+        
+        # Якщо версію не знайдено, спробуємо наступну версію
         if [ -z "$DRIVER_VERSION" ]; then
-          echo "Помилка: Не вдалося знайти версію Chromedriver для Chrome $CHROME_VERSION"
+          for i in $(seq 1 2); do
+            TRY_VERSION=$((CHROME_MAJOR_VERSION + i))
+            RESPONSE=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${TRY_VERSION}")
+            if [[ "$RESPONSE" != *"NoSuchKey"* && "$RESPONSE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              DRIVER_VERSION=$RESPONSE
+              break
+            fi
+          done
+        fi
+        
+        # Перевіряємо, чи знайдено версію
+        if [ -z "$DRIVER_VERSION" ]; then
+          echo "Помилка: Не вдалося знайти сумісну версію Chromedriver для Chrome $CHROME_VERSION"
           exit 1
         fi
         echo "Версія Chromedriver: $DRIVER_VERSION"
