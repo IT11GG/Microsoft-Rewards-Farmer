@@ -33,20 +33,34 @@ jobs:
 
     - name: Install Chromedriver
       run: |
-        # Отримуємо сумісну версію Chromedriver для Chrome 126
-        DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_126")
+        # Отримуємо встановлену версію Chrome, наприклад "Google Chrome 126.0.6478.126"
+        CHROME_VERSION_FULL=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+        echo "Встановлена повна версія Chrome: $CHROME_VERSION_FULL"
+
+        # Візьмемо лише перші три числа версії (наприклад, 126.0.6478)
+        CHROME_VERSION_SHORT=$(echo $CHROME_VERSION_FULL | cut -d '.' -f 1,2,3)
+        echo "Коротка версія Chrome для пошуку драйвера: $CHROME_VERSION_SHORT"
+
+        # Спроба отримати сумісну версію Chromedriver для Chrome 126.0.6478
+        DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION_SHORT}")
+
+        # Якщо не знайшли - беремо основну версію (перші дві частини, наприклад 126.0)
         if [ -z "$DRIVER_VERSION" ]; then
-          echo "Помилка: Не вдалося знайти версію Chromedriver для Chrome 126"
-          exit 1
+          CHROME_VERSION_MAJOR_MINOR=$(echo $CHROME_VERSION_FULL | cut -d '.' -f 1,2)
+          echo "Не знайдено драйвер для $CHROME_VERSION_SHORT, пробуємо для $CHROME_VERSION_MAJOR_MINOR"
+          DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION_MAJOR_MINOR}")
         fi
-        echo "Версія Chromedriver: $DRIVER_VERSION"
-        
-        # Завантажуємо та встановлюємо Chromedriver
-        wget -q "https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip"
-        if [ $? -ne 0 ]; then
-          echo "Помилка: Не вдалося завантажити Chromedriver $DRIVER_VERSION"
-          exit 1
+
+        # Якщо знову не знайшли — беремо просто останню доступну версію
+        if [ -z "$DRIVER_VERSION" ]; then
+          echo "Не вдалося знайти сумісну версію Chromedriver для Chrome $CHROME_VERSION_FULL"
+          echo "Встановимо останню доступну версію Chromedriver"
+          DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE")
         fi
+
+        echo "Встановлюємо Chromedriver версії: $DRIVER_VERSION"
+
+        wget -q "https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip"
         unzip chromedriver_linux64.zip
         sudo mv chromedriver /usr/local/bin/
         sudo chmod +x /usr/local/bin/chromedriver
