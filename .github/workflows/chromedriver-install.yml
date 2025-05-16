@@ -1,0 +1,39 @@
+name: Install Chrome & Chromedriver
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-chromedriver:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Встановлюємо потрібну версію Google Chrome (126)
+      run: |
+        wget -q https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_126.0.6478.126-1_amd64.deb
+        sudo dpkg -i google-chrome-stable_126.0.6478.126-1_amd64.deb || sudo apt-get install -f -y
+        rm google-chrome-stable_126.0.6478.126-1_amd64.deb
+        google-chrome --version
+
+    - name: Завантаження та встановлення сумісного Chromedriver
+      run: |
+        CHROME_VERSION_FULL=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
+        echo "Встановлена версія Chrome: $CHROME_VERSION_FULL"
+
+        CHROME_VERSION_MAJOR=$(echo $CHROME_VERSION_FULL | cut -d '.' -f 1)
+        echo "Мажорна версія Chrome: $CHROME_VERSION_MAJOR"
+
+        DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION_MAJOR")
+
+        if [ -z "$DRIVER_VERSION" ]; then
+          echo "Не знайшли драйвер для $CHROME_VERSION_MAJOR, беремо останню версію"
+          DRIVER_VERSION=$(curl -sS "https://chromedriver.storage.googleapis.com/LATEST_RELEASE")
+        fi
+
+        echo "Ставимо Chromedriver версії: $DRIVER_VERSION"
+
+        wget -q "https://chromedriver.storage.googleapis.com/$DRIVER_VERSION/chromedriver_linux64.zip"
+        unzip chromedriver_linux64.zip
+        sudo mv chromedriver /usr/local/bin/
+        sudo chmod +x /usr/local/bin/chromedriver
+        chromedriver --version
