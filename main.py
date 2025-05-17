@@ -6,7 +6,9 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, WebDriverException, TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Читаємо акаунти з секретів (GitHub Secrets)
 ACCOUNTS_JSON = os.getenv("ACCOUNTS_JSON")
@@ -16,77 +18,41 @@ if not ACCOUNTS_JSON:
 
 accounts = json.loads(ACCOUNTS_JSON)
 
-# Список ~100 пошукових термінів для рандомізації
-SEARCH_TERMS = [
-    "Ukraine history", "Latest tech news", "Python programming", "Space exploration",
-    "Healthy recipes", "Best movies 2025", "Travel tips Europe", "Climate change effects",
-    "How to meditate", "Stock market today", "Football scores", "AI breakthroughs",
-    "Gardening for beginners", "Machine learning tutorials", "Electric cars",
-    "Famous paintings", "Yoga exercises", "Cryptocurrency trends", "Quantum computing",
-    "World landmarks", "Music festivals", "Healthy lifestyle tips", "Photography ideas",
-    "Mobile app development", "Top novels 2024", "Movie reviews", "Web design trends",
-    "Mediterranean diet benefits", "History of computers", "New programming languages",
-    "SpaceX launches", "Virtual reality games", "Basketball highlights", "Climate policy",
-    "Travel safety tips", "Learning languages online", "Digital marketing strategies",
-    "Famous scientists", "Art museums", "Best smartphones", "Sustainable energy",
-    "Coffee brewing methods", "Mental health awareness", "Cloud computing basics",
-    "Top universities", "Latest gadgets", "Fashion trends 2025", "World cuisine recipes",
-    "Historical documentaries", "Meditation benefits", "Tech startups", "Cooking hacks",
-    "Science fiction books", "Photography techniques", "DIY home projects", "Electric bikes",
-    "Travel photography", "Online courses", "Music theory basics", "Astronomy facts",
-    "Sports news", "Mediterranean travel", "Software development life cycle",
-    "Healthy snacks", "Coding challenges", "Mobile photography tips", "AI ethics",
-    "Wildlife conservation", "Gaming consoles", "Fitness programs", "Space telescopes",
-    "Blockchain technology", "Fashion designers", "Outdoor activities", "Nutrition facts",
-    "Movie trailers", "Tech reviews", "Public speaking tips", "Gardening tools",
-    "Mindfulness exercises", "Robotics competitions", "Digital art tutorials",
-    "Renewable resources", "Coding bootcamps", "Astronaut training", "World cultures",
-    "Healthy desserts", "Travel blogs", "Fitness gadgets", "Software testing",
-    "Painting styles", "Music instruments", "Photography contests", "Car reviews",
-    "Mobile games", "Yoga poses", "Science news", "Financial planning", "Space missions"
-]
+SEARCH_TERMS = [...]  # Ваш список пошукових термінів
 
 def init_driver():
     options = Options()
-    options.add_argument("--headless=new")  # новий headless режим, більш стабільний
+    options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--remote-debugging-port=9222")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(10)
     return driver
 
 def login(driver, username, password):
-    driver.get("https://login.live.com/")
-    time.sleep(2)
-
-    # Ввод емейлу
     try:
+        driver.get("https://login.live.com/")
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.NAME, "loginfmt")))
+        
         email_input = driver.find_element(By.NAME, "loginfmt")
         email_input.clear()
         email_input.send_keys(username)
         email_input.send_keys(Keys.RETURN)
-    except NoSuchElementException:
-        print(f"❌ Не знайдено поле вводу email для {username}")
-        return False
-    time.sleep(3)
-
-    # Ввод пароля
-    try:
+        
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.NAME, "passwd")))
         password_input = driver.find_element(By.NAME, "passwd")
         password_input.clear()
         password_input.send_keys(password)
         password_input.send_keys(Keys.RETURN)
-    except NoSuchElementException:
-        print(f"❌ Не знайдено поле вводу пароля для {username}")
-        return False
-    time.sleep(5)
-
-    # Перевірка успішного входу
-    try:
-        driver.find_element(By.ID, "meControl")
+        
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "meControl")))
         return True
-    except NoSuchElementException:
+    except (NoSuchElementException, TimeoutException) as e:
+        print(f"❌ Помилка логіну для {username}: {str(e)}")
         return False
 
 def perform_searches(driver, username):
@@ -95,8 +61,12 @@ def perform_searches(driver, username):
     searches = random.sample(SEARCH_TERMS, num_searches)
 
     for term in searches:
-        driver.get(f"https://www.bing.com/search?q={term.replace(' ', '+')}")
-        time.sleep(random.uniform(2, 5))
+        try:
+            driver.get(f"https://www.bing.com/search?q={term.replace(' ', '+')}")
+            time.sleep(random.uniform(2, 5))
+        except WebDriverException as e:
+            print(f"⚠ Помилка пошуку для {username}: {str(e)}")
+            continue
 
     points = get_points(driver)
     print(f"✅ Пошук завершено, балів: {points}")
@@ -104,7 +74,8 @@ def perform_searches(driver, username):
 def get_points(driver):
     try:
         driver.get("https://rewards.microsoft.com/")
-        time.sleep(5)
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.RewardsPointsCount, span.msportalfx-ux-fluent-text-5, span#id_rc")))
+        
         selectors = [
             "div.RewardsPointsCount",
             "span.msportalfx-ux-fluent-text-5",
@@ -119,7 +90,8 @@ def get_points(driver):
             except NoSuchElementException:
                 continue
         return "Н/Д"
-    except Exception:
+    except Exception as e:
+        print(f"⚠ Помилка отримання балів: {str(e)}")
         return "Н/Д"
 
 def main():
@@ -135,14 +107,19 @@ def main():
 
             success = login(driver, username, password)
             if not success:
-                print(f"❌ Помилка логіну для {username}")
                 continue
 
-            perform_searches(driver, username)
+            try:
+                perform_searches(driver, username)
+            except WebDriverException as e:
+                print(f"❌ Помилка WebDriver для {username}: {str(e)}")
+                continue
 
-            # Логаут
-            driver.get("https://login.live.com/logout.srf")
-            time.sleep(3)
+            try:
+                driver.get("https://login.live.com/logout.srf")
+                time.sleep(3)
+            except WebDriverException:
+                pass
     finally:
         driver.quit()
 
